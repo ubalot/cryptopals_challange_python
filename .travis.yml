@@ -1,0 +1,24 @@
+language: python
+
+python: 3.6
+
+git:
+  depth: 1
+
+
+install:
+  - pip3 install -r requirements.txt
+
+
+script:
+  - python3 -m unittest set01_unittest.py
+  - python3 -m unittest set02_unittest.py
+
+
+after_success: true
+
+after_script: true
+
+notifications:
+  email:
+    - ubalot1@gmail.com
