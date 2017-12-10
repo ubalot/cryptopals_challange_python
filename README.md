@@ -7,6 +7,7 @@ sudo apt install python3-virtualenv virtualenv
 ```bash
 cd cryptopals_challange_python
 virtualenv -p python3 venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
