@@ -149,20 +149,34 @@ class CryptoChallenge(unittest.TestCase):
 
 
 
-    # def test_Set2_Challenge13(self):
-    #     """
-    #     ECB cut-and-paste
-    #     """
-    #     cookie = 'foo=bar&baz=qux&zap=zazzle'
-    #     json = util.decode_cookie(cookie)
-    #     result = {
-    #         'foo': 'bar',
-    #         'baz': 'qux',
-    #         'zap': 'zazzle'
-    #     }
-    #     self.assertEqual(json, result)
-    #     # self.assertEqual(util.profile_for(json), cookie)
+    def test_Set2_Challenge13(self):
+        """
+        ECB cut-and-paste
+        """
+        cookie = 'foo=bar&baz=qux&zap=zazzle'
+        json = util.decode_cookie(cookie)
+        expeced_cookie = {
+            'foo': 'bar',
+            'baz': 'qux',
+            'zap': 'zazzle'
+        }
+        self.assertEqual(json, expeced_cookie)
 
+        profile = util.profile_for('foo@bar.com')
+        expeced_profile = 'email=foo@bar.com&uid=10&role=user'
+        self.assertEqual(profile, expeced_profile)
+
+        key = util.random_key(16)
+        # ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
+        ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
+        print(ciphertext)
+        decrypted = util.CBC(ciphertext, key)
+        print(decrypted)
+
+        # attacker = AES.new(key, AES.MODE_ECB)
+        # bytes_plaintext = attacker.decrypt(ciphertext)
+        # plaintext = bytes_plaintext.decode('utf-8').replace('\x04', '')
+        # self.assertEqual(profile, plaintext)
 
 
 if __name__ == '__main__':

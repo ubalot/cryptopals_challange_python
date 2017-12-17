@@ -6,9 +6,15 @@ import unittest
 from Crypto.Cipher import AES
 
 import util
+from utils.attacks import Attacks
+from utils.binary_data_operators import BinaryDataOperators
+from utils.converter import Converter
+
 
 class CryptoChallenge(unittest.TestCase):
-
+    converter = Converter()
+    operators = BinaryDataOperators()
+    attacks = Attacks()
 
     def test_Set01_Challenge01(self):
         """
@@ -16,14 +22,12 @@ class CryptoChallenge(unittest.TestCase):
         """
         # Given values
         hex_string = '49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d'
-        result = 'SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t'
 
-        binary = binascii.a2b_hex(hex_string)  # hex ascii to binary
-        ascii_string = binascii.b2a_base64(binary)  # binary to base64 ascii
-        base64_string = ascii_string.decode("utf-8")[:-1]  # get rid of new line
+        # base64_string = self.converter.from_hex_to_base64(hex_string, return_str=True)
+        binary_input = self.converter.decode_hex(hex_string)
+        base64 = self.converter.encode_base64(binary_input)
 
-        self.assertEqual(base64_string, result)
-
+        self.assertEqual(base64.decode('utf-8'), 'SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t')
 
     def test_Set01_Challenge02(self):
         """
@@ -32,23 +36,18 @@ class CryptoChallenge(unittest.TestCase):
         # Given values
         hex_string = '1c0111001f010100061a024b53535009181c'
         hex_xor_buffer = '686974207468652062756c6c277320657965'
-        result = '746865206b696420646f6e277420706c6179'
 
         # Convert hex ascii to binary
-        binary_buffer_1 = binascii.a2b_hex(hex_string)
-        binary_buffer_2 = binascii.a2b_hex(hex_xor_buffer)
+        buffer1 = self.converter.decode_hex(hex_string)
+        buffer2 = self.converter.decode_hex(hex_xor_buffer)
 
         # Xor
-        xored_buffer = util.fixed_xor(binary_buffer_1, binary_buffer_2)
+        xored_buffer = self.operators.fixed_xor(buffer1, buffer2)
 
         # Convert binary to hex
-        xored_hex = binascii.b2a_hex(xored_buffer)
+        xored = binascii.b2a_hex(xored_buffer)
 
-        # Decode hex to utf-8
-        xored = xored_hex.decode('utf-8')
-
-        self.assertEqual(xored, result)
-
+        self.assertEqual(xored.decode('utf-8'), '746865206b696420646f6e277420706c6179')
 
     def test_Set01_Challenge03(self):
         """
@@ -58,10 +57,10 @@ class CryptoChallenge(unittest.TestCase):
         hex_string = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
 
         # Decoding hex to binary
-        binary = binascii.a2b_hex(hex_string)
+        binary = self.converter.decode_hex(hex_string)
 
         # Brute-force hex_string and find the char it was xored against.
-        result = util.find_xor_singlechar_key(binary)
+        result = self.attacks.find_xor_singlechar_key(binary)
 
         # Results
         plaintext = result['plaintext']
@@ -72,7 +71,6 @@ class CryptoChallenge(unittest.TestCase):
         expected_key = 'X'
 
         self.assertTrue(expected_plaintext == plaintext and expected_key == key)
-
 
     def test_Set01_Challenge04(self):
         """
@@ -90,9 +88,9 @@ class CryptoChallenge(unittest.TestCase):
                 ciphertext = ciphertext.replace('\n', '')
 
                 # Decode from hex
-                decoded_binary = binascii.a2b_hex(ciphertext)
+                decoded_binary = self.converter.decode_hex(ciphertext)
 
-                result = util.find_xor_singlechar_key(decoded_binary)
+                result = self.attacks.find_xor_singlechar_key(decoded_binary)
                 if result['score'] > winner['score']:
                     winner['score'] = result['score']
                     winner['plaintext'] = result['plaintext']
@@ -105,7 +103,6 @@ class CryptoChallenge(unittest.TestCase):
         expected_key = '5'
         self.assertTrue(expected_plaintext == plaintext and expected_key == key)
 
-
     def test_Set01_Challenge05(self):
         """
         Implement repeating-key XOR
@@ -116,17 +113,16 @@ class CryptoChallenge(unittest.TestCase):
         expected_output = "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f"
 
         # Convert strings to binary form
-        binary_input = bytes(input_string, encoding='utf-8')
-        binary_key = bytes(key, encoding='utf-8')
+        binary_input = self.converter.str_to_bytes(input_string)
+        binary_key = self.converter.str_to_bytes(key)
 
         # xor input with key
-        result = util.repeating_xor(binary_input, binary_key)
+        result = self.operators.repeating_xor(binary_input, binary_key)
 
         # Encode to hex
-        result = binascii.b2a_hex(result).decode()
+        result = self.converter.encode_hex(result)
 
-        self.assertEqual(result, expected_output)
-
+        self.assertEqual(result.decode(), expected_output)
 
     def test_Set01_Challenge06(self):
         """
@@ -136,9 +132,9 @@ class CryptoChallenge(unittest.TestCase):
             content = ciphertext_file.read()
 
             # Decode from base64.
-            ciphertext = binascii.a2b_base64(content)
+            ciphertext = self.converter.decode_base64(content)
 
-            result = util.break_repeating_key_xor(ciphertext)
+            result = self.attacks.break_repeating_key_xor(ciphertext)
 
             key = result['key'].decode("utf-8")
             plaintext = result['plaintext'].decode("utf-8")
@@ -155,14 +151,13 @@ class CryptoChallenge(unittest.TestCase):
         """
         AES in ECB mode
         """
-        # 16 char length and 16 bytes length
-        key = 'YELLOW SUBMARINE'
-        byte_key = bytes(key, encoding="utf-8")  # binary form
-        
+        # 16 char length
+        byte_key = b'YELLOW SUBMARINE'
+
         with open('resources/Set01-Challenge07.txt', 'r') as f:
             content = f.read()
-            # Decode base64
-            ciphertext = binascii.a2b_base64(content)
+
+            ciphertext = self.converter.decode_base64(content)
 
             # Create object AES in MODE_ECB
             cipher = AES.new(byte_key, AES.MODE_ECB)
