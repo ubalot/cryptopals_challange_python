@@ -1,11 +1,10 @@
 #!/venv/bin/python
 
 import binascii
-import os
 import unittest
-from Crypto.Cipher import AES
 
-import util
+from utils import oracle
+from utils.aes_encryption import AES_Encryption
 from utils.attacks import Attacks
 from utils.binary_data_operators import BinaryDataOperators
 from utils.converter import Converter
@@ -45,7 +44,7 @@ class CryptoChallenge(unittest.TestCase):
         xored_buffer = self.operators.fixed_xor(buffer1, buffer2)
 
         # Convert binary to hex
-        xored = binascii.b2a_hex(xored_buffer)
+        xored = self.converter.encode_hex(xored_buffer)
 
         self.assertEqual(xored.decode('utf-8'), '746865206b696420646f6e277420706c6179')
 
@@ -160,7 +159,7 @@ class CryptoChallenge(unittest.TestCase):
             ciphertext = self.converter.decode_base64(content)
 
             # Create object AES in MODE_ECB
-            cipher = AES.new(byte_key, AES.MODE_ECB)
+            cipher = AES_Encryption(byte_key, 'ECB')
 
             # Decrypt from AES
             plaintext = cipher.decrypt(ciphertext).decode("utf-8")[:-4]
@@ -170,7 +169,6 @@ class CryptoChallenge(unittest.TestCase):
         
         self.assertEqual(expected_result, plaintext)
 
-
     def test_Set01_Challenge08(self):
         """
         Detect AES in ECB mode
@@ -178,7 +176,7 @@ class CryptoChallenge(unittest.TestCase):
         result = None
         with open('resources/Set01-Challenge08.txt', 'r') as f:
             for line in f:
-                if util.is_ECB_encrypted(line, 16):
+                if oracle.is_ECB_encrypted(line, 16):
                     result = line
 
         with open('resources/Set01-Challenge08-Solution.txt', 'r') as solution:
