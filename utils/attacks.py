@@ -1,91 +1,114 @@
 import itertools
 
 import constants
-from utils.binary_data_operators import BinaryDataOperators
+from utils import oracle
+from utils.aesencryption import AESEncryption
+from utils.binary_data_operators import xor_single_char, normalized_hamming_distance, repeating_xor, fixed_xor
 
 
-class Attacks(object):
-    operators = BinaryDataOperators()
+def explode(string, block_size):
+    return [string[i:i + block_size] for i in range(0, len(string), block_size)]
 
-    @staticmethod
-    def explode(string, block_size):
-        return [string[i:i + block_size] for i in range(0, len(string), block_size)]
 
-    def probable_keysize(self, ciphertext):
-        keysizes = {}
+def probable_key_size(cipher_text):
+    keysizes = {}
 
-        for size in range(2, 41):
+    for size in range(2, 41):
 
-            # Take just the four blocks for a quick check.
-            blocks = self.explode(ciphertext, size)[:4]
+        # Take just the four blocks for a quick check.
+        blocks = explode(cipher_text, size)[:4]
 
-            # Check same length of blocks before calling normalized_hamming_distance
-            i, j, k, l = (blocks[i] for i in range(4))
-            if len(i) == len(j) == len(k) == len(l):
-                keysizes.setdefault(
-                    self.operators.normalized_hamming_distance(i, j, k, l),
-                    size
-                )
+        # Check same length of blocks before calling normalized_hamming_distance
+        i, j, k, l = (blocks[i] for i in range(4))
+        if len(i) == len(j) == len(k) == len(l):
+            keysizes.setdefault(
+                normalized_hamming_distance(i, j, k, l),
+                size
+            )
 
-        # Return the keysize associated to the minimum normalized hamming distance.
-        return keysizes.get(min(keysizes.keys()))
+    # Return the keysize associated to the minimum normalized hamming distance.
+    return keysizes.get(min(keysizes.keys()))
 
-    def break_repeating_key_xor(self, ciphertext):
-        # Get most probable key length (keysize).
-        keysize = self.probable_keysize(ciphertext)
 
-        # Break ciphertext in blocks of length keysize.
-        blocks = self.explode(ciphertext, keysize)
+def break_repeating_key_xor(ciphertext):
+    # Get most probable key length (keysize).
+    keysize = probable_key_size(ciphertext)
 
-        # Transpose blocks.
-        # *blocks: argument will be unpacked. In other words, the elements of the
-        # list are singularized.
-        transposed_blocks = list(itertools.zip_longest(*blocks, fillvalue=0))
+    # Break ciphertext in blocks of length keysize.
+    blocks = explode(ciphertext, keysize)
 
-        # Find the key of each transposed block and put it in a list
-        keys = [self.find_xor_singlechar_key(bytes(block))['key'] for block
-                in transposed_blocks]
+    # Transpose blocks.
+    # *blocks: argument will be unpacked. In other words, the elements of the
+    # list are singularized.
+    transposed_blocks = list(itertools.zip_longest(*blocks, fillvalue=0))
 
-        key = bytes(''.join(keys), encoding="utf-8")  # eg: "c" -> b"c"
+    # Find the key of each transposed block and put it in a list
+    keys = [find_xor_single_char_key(bytes(block))['key'] for block
+            in transposed_blocks]
 
-        # Decrypt plaintext with the key
-        plaintext = self.operators.repeating_xor(ciphertext, key)
+    key = bytes(''.join(keys), encoding="utf-8")  # eg: "c" -> b"c"
 
-        return {
-            'key': key,
-            'plaintext': plaintext
-        }
+    # Decrypt plaintext with the key
+    plaintext = repeating_xor(ciphertext, key)
 
-    def find_xor_singlechar_key(self, ciphertext):
-        """ Ciphertext must be in binary form.
+    return {
+        'key': key,
+        'plaintext': plaintext
+    }
 
-        :param ciphertext: bytes
-        :return: dict
-        """
-        CHAR_FREQUENCY = constants.CHAR_FREQUENCY
 
-        # Store temporary best score.
-        result = {
-            "plaintext": "",
-            "score": 0,
-            "key": ''
-        }
+def find_xor_single_char_key(ciphertext):
+    """ Ciphertext must be in binary form.
 
-        # Test every number from 0 to 255 as possible key.
-        for key in range(256):
-            plaintext = self.operators.xor_singlechar(ciphertext, key)
+    :param ciphertext: bytes
+    :return: dict
+    """
+    CHAR_FREQUENCY = constants.CHAR_FREQUENCY
 
-            score = 0
+    # Store temporary best score.
+    result = {
+        "plaintext": "",
+        "score": 0,
+        "key": ''
+    }
 
-            for byte in plaintext:
-                # Add the frequency of the character to the score
-                char = bytes([byte]).decode('latin-1').lower()
-                if char in CHAR_FREQUENCY.keys():
-                    score += CHAR_FREQUENCY[char]
+    # Test every number from 0 to 255 as possible key.
+    for key in range(256):
+        plaintext = xor_single_char(ciphertext, key)
 
-            if score > result['score']:
-                result['score'] = score
-                result['plaintext'] = plaintext.decode('latin-1')
-                result['key'] = chr(key)
+        score = 0
 
-        return result
+        for byte in plaintext:
+            # Add the frequency of the character to the score
+            char = bytes([byte]).decode('latin-1').lower()
+            if char in CHAR_FREQUENCY.keys():
+                score += CHAR_FREQUENCY[char]
+
+        if score > result['score']:
+            result['score'] = score
+            result['plaintext'] = plaintext.decode('latin-1')
+            result['key'] = chr(key)
+
+    return result
+
+
+def decrypt_in_cbc(ciphertext, key=None, IV=None):
+    """ Arguments must be bytes strings. """
+    key = key if key else bytes([0] * 16)
+    IV = IV if IV else bytes([0] * len(key))
+
+    block_size = len(key)
+    block_count = int(len(ciphertext) / block_size)
+
+    cipher = AESEncryption(key, 'ECB')
+
+    plaintext = b''
+    prev_block = IV
+
+    for i in range(block_count):
+        block = oracle.get_block(ciphertext, block_size, i)
+        xored = fixed_xor(cipher.decrypt(block), prev_block)
+        plaintext += xored
+        prev_block = block
+
+    return plaintext
