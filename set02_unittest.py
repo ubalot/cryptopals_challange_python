@@ -4,6 +4,8 @@ import binascii
 import unittest
 import random
 
+import os
+
 import util
 from utils import converter
 from utils.aesencryption import AESEncryption
@@ -93,59 +95,6 @@ class CryptoChallenge(unittest.TestCase):
 
         self.assertTrue(block_size == 16 and is_ecb and res == unknown_string)
 
-
-    # def test_Set02_Challenge13(self):
-    #     """
-    #     ECB cut-and-paste
-    #     """
-    #     cookie = 'foo=bar&baz=qux&zap=zazzle'
-    #     json = util.decode_cookie(cookie)
-    #     result = {
-    #         'foo': 'bar',
-    #         'baz': 'qux',
-    #         'zap': 'zazzle'
-    #     }
-    #     # result = [
-    #     #     ('foo', 'bar'),
-    #     #     ('baz', 'qux'),
-    #     #     ('zap', 'zazzle')
-    #     # ]
-    #
-    #     self.assertEqual(json, result)
-    #
-    #     profile = util.profile_for('foo@bar.com')
-    #     # print(plaintext)
-    #     cookie_result = 'email=foo@bar.com&uid=10&role=user'
-    #     self.assertEqual(profile, cookie_result)
-    #
-    #     key = util.random_key(16)
-    #     # ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
-    #
-    #     # attacker = AES.new(key, AES.MODE_ECB)
-    #     # plaintext = attacker.decrypt(ciphertext)
-    #
-    #     #  # 10x A to fill the first block, then admin padding for the next block
-    #     # plaintext = util.profile_for('A' * 10 + 'admin' + '\x0b' * 0xb)
-    #     # cipher = AES.new(key, AES.MODE_ECB)
-    #     # ciphertext = cipher.encrypt(util.pkcs7pad(bytes(plaintext)))
-    #     # adminBlock = ciphertext[16:32]  # this is the block that contains admin
-    #
-    #     # # now request a regular account and make it an admin account
-    #     # # the mail address correctly aligns the blocks
-    #     # plaintext = profile_for('admin1@me.com')
-    #     # print( 'pre-encrypted data: ', util.decode_cookie(plaintext))
-    #     # ciphertext = cipher.encrypt(util.pkcs7pad(bytes(plaintext)), key)
-    #
-    #     # # replace the last block user+padding with admin+padding
-    #     # ciphertext = ciphertext[:-16] + adminBlock
-    #     # plaintext = cipher.decryot(ciphertext)
-    #
-    #     # # the object should now contain role: admin
-    #     # print ('manipulated data: ', decode_cookie(str(plaintext)))
-
-
-
-
     def test_Set2_Challenge13(self):
         """
         ECB cut-and-paste
@@ -163,43 +112,49 @@ class CryptoChallenge(unittest.TestCase):
         expeced_profile = 'email=foo@bar.com&uid=10&role=user'
         self.assertEqual(profile, expeced_profile)
 
-        # key = util.random_key(16)
         key = AESEncryption().random_key(16)
-        # ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
-        ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
-        print(ciphertext)
-        decrypted = util.CBC(ciphertext, key)
-        print(decrypted)
+        ciphertext = AESEncryption(key, 'ECB').encrypt(bytes(profile, encoding='utf-8'))
+        # print(ciphertext)
+        # decrypted = AESEncryption(key, 'ECB').decrypt(ciphertext)
+        # print(decrypted)
 
-        # attacker = AES.new(key, AES.MODE_ECB)
-        # bytes_plaintext = attacker.decrypt(ciphertext)
-        # plaintext = bytes_plaintext.decode('utf-8').replace('\x04', '')
-        # self.assertEqual(profile, plaintext)
 
-        def ecb_cut_and_paste(encryption_oracle):
-            """By cutting and pasting pieces of ciphertexts, forces a ciphertext of an admin user"""
+        profile = util.profile_for('four@four.com')
+        cipher_text= AESEncryption(key, 'ECB').encrypt(bytes(profile, encoding='utf-8'))
+        admin_email = ('\x00' * 30) + 'admin'# + ('\x0b' * 29)
+        admin_profile = util.profile_for(admin_email)
+        admin_cipher_text = AESEncryption(key, 'ECB').encrypt(bytes(admin_profile, encoding='utf-8'))
 
-            # The first plaintext that will be encrypted is:
-            # block 1:           block 2 (pkcs7 padded):                             and (omitting the padding):
-            # email=xxxxxxxxxx   admin\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b   &uid=10&role=user
-            prefix_len = AES.block_size - len("email=")
-            suffix_len = AES.block_size - len("admin")
-            email1 = 'x' * prefix_len + "admin" + (chr(suffix_len) * suffix_len)
-            encrypted1 = encryption_oracle.encrypt(email1)
+        res = cipher_text[0:32] + admin_cipher_text[32:64]
 
-            # The second plaintext that will be encrypted is:
-            # block 1:           block 2:           block 3
-            # email=master@me.   com&uid=10&role=   user\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c
-            email2 = "master@me.com"
-            encrypted2 = encryption_oracle.encrypt(email2)
+        result = AESEncryption(key, 'ECB').decrypt(res)
+        # print('result', result)
+        self.assertTrue('admin' in result.decode('utf-8'))
 
-            # The forced ciphertext will cut and paste the previous ciphertexts to be decrypted as:
-            # block 1:           block 2:           block 3:
-            # email=master@me.   com&uid=10&role=   admin\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b
-            forced = encrypted2[:32] + encrypted1[16:32]
+    def test_Set2_Challenge14(self):
+        """Byte-at-a-time ECB decryption (Harder)"""
 
-            return forced
+        random_bytes = os.urandom(random.randint(0, 10))
 
+        unknown_string = binascii.a2b_base64(
+            b'''Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg
+                aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq
+                dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg
+                YnkK'''
+        )
+
+        target_bytes = b'my plain text'
+        _input = random_bytes + unknown_string + target_bytes
+
+        key = util.random_key(16)
+
+        aes_128_ecb = lambda s: util.aes_128_ecb(s, key)
+
+        block_size = util.detect_block_size(aes_128_ecb)
+
+        result = util.find_every_byte(aes_128_ecb, block_size, _input)
+
+        self.assertTrue(target_bytes in result)
 
 if __name__ == '__main__':
     unittest.main()

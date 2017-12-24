@@ -1,8 +1,6 @@
 import os
 import random
 
-from Crypto.Cipher import AES
-
 from utils import converter
 from utils.aesencryption import AESEncryption
 

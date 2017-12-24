@@ -5,6 +5,7 @@ the U.S. National Institute of Standards and Technology (NIST) in 2001.
 import os
 from Crypto.Cipher import AES
 
+from utils import converter
 from utils.binary_data_operators import fixed_xor
 
 
@@ -25,17 +26,20 @@ class AESEncryption(object):
         return cls(key, encryption_mode)
 
     def encrypt(self, plain_text):
-        return self.cipher.encrypt(plain_text)
+        """AES 128 ECB encryption"""
+        padded_plain_text = converter.pkcs7pad(plain_text, 16)
+        return self.cipher.encrypt(padded_plain_text)
 
     def decrypt(self, cipher_text, iv=None):
         """
         :param cipher_text: bytes
+        :param iv: bytes
         :return: bytes
         """
         if self.__encryption_mode == AES.MODE_ECB:
             return self.cipher.decrypt(cipher_text)
         elif self.__encryption_mode == AES.MODE_CBC:
-            return self.__decrypt_CBC(cipher_text, self.__key, iv)
+            return self.__decrypt_cbc(cipher_text, self.__key, iv)
         return None
 
     @staticmethod
@@ -44,10 +48,10 @@ class AESEncryption(object):
         return os.urandom(length)
 
     @staticmethod
-    def __decrypt_CBC(ciphertext, key=None, IV=None):
+    def __decrypt_cbc(ciphertext, key=None, IV=None):
         """ Arguments must be bytes strings. """
-        key = bytes([0] * 16) if not key else key
-        IV = bytes([0] * len(key)) if not IV else IV
+        key = key if key else bytes([0] * 16)
+        IV = IV if IV else bytes([0] * len(key))
 
         block_size = len(key)
         block_count = int(len(ciphertext) / block_size)
@@ -56,6 +60,9 @@ class AESEncryption(object):
 
         plaintext = b''
         prev_block = IV
+
+        def get_block(buffer, block_size, index):
+            return buffer[block_size * index: block_size * (index + 1)]
 
         for i in range(block_count):
             block = get_block(ciphertext, block_size, i)
