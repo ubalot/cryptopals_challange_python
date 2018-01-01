@@ -156,5 +156,17 @@ class CryptoChallenge(unittest.TestCase):
 
         self.assertTrue(target_bytes in result)
 
+
+    def test_Set2_Challange15(self):
+        """PKCS#7 padding validation"""
+
+        self.assertTrue(converter.is_valid_pkcs7_padding("ICE ICE BABY\x04\x04\x04\x04"))
+
+        with self.assertRaises(converter.InvalidPkcs7PaddingException):
+            converter.is_valid_pkcs7_padding("ICE ICE BABY\x05\x05\x05\x05")
+
+        with self.assertRaises(converter.InvalidPkcs7PaddingException):
+            converter.is_valid_pkcs7_padding("ICE ICE BABY\x01\x02\x03\x04")
+
 if __name__ == '__main__':
     unittest.main()

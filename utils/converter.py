@@ -1,4 +1,5 @@
 import binascii
+import string
 
 
 def str_to_bytes(_input, encoding='utf-8'):
@@ -40,10 +41,28 @@ def decode_base64(_base64):
 
 
 def pkcs7pad(cipher_text, block_size, value=b'\x04'):
-    """
-    cipher_text: bytes string, block_size: int, value: bytes char
-    Return ciphertext padded with value until it reach blocksize length.
+    """Return ciphertext padded with value until it reach blocksize length.
+    :param cipher_text: bytes
+    :param block_size: int
+    :param value: bytes
+    :return: bytes
     """
     length = len(cipher_text)
     pad = block_size - (length % block_size)
     return b''.join((cipher_text, value * pad))
+
+
+class InvalidPkcs7PaddingException(Exception):
+    pass
+
+
+def is_valid_pkcs7_padding(_input):
+    """
+    :param _input: bytes
+    :return: bool
+    """
+    valid_chars = string.printable + '\x04'
+    for char in _input:
+        if char not in valid_chars:
+            raise InvalidPkcs7PaddingException
+    return True
