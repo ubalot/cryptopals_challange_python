@@ -1,12 +1,15 @@
 #!/venv/bin/python
 
 import binascii
-import os
 import unittest
 import random
-from Crypto.Cipher import AES
+
+import os
 
 import util
+from utils import converter
+from utils.aesencryption import AESEncryption
+from utils.attacks import decrypt_in_cbc
 
 
 class CryptoChallenge(unittest.TestCase):
@@ -15,14 +18,10 @@ class CryptoChallenge(unittest.TestCase):
         """
         Implement PKCS#7 padding
         """
-        # 16 bytes
-        plaintext = 'YELLOW SUBMARINE'
-        # to 20 bytes
-        padded = 'YELLOW SUBMARINE\x04\x04\x04\x04'
+        plaintext = b'YELLOW SUBMARINE'  # 16 bytes
+        padded = b'YELLOW SUBMARINE\x04\x04\x04\x04'  # to 20 bytes
 
-        byte_plaintext = bytes(plaintext, encoding="utf-8")  # to binary
-        byte_plaintext_padded = util.pkcs7pad(byte_plaintext, 20, b'\x04')
-        plaintext_padded = byte_plaintext_padded.decode(encoding="utf-8")
+        plaintext_padded = converter.pkcs7pad(plaintext, 20, b'\x04')
 
         self.assertEqual(plaintext_padded, padded)
 
@@ -30,16 +29,16 @@ class CryptoChallenge(unittest.TestCase):
         """
         Implement CBC mode
         """
-        key = "YELLOW SUBMARINE"
-        bytes_key = bytes(key, encoding="utf-8")
-        IV = bytes([0] * len(key))  # Initialization Vector
+        key = b"YELLOW SUBMARINE"
+        iv = bytes([0] * len(key))  # Initialization Vector
 
         with open('resources/Set02-Challenge10.txt', 'r') as f:
             # Decode text from base64
-            ciphertext = binascii.a2b_base64(f.read())
+            cipher_text = converter.decode_base64(f.read())
 
             # Decrypt a AES encrypted file in CBC mode.
-            plaintext = util.CBC(ciphertext, bytes_key, IV)
+            # plaintext = util.CBC(cipher_text, key, iv)
+            plaintext = decrypt_in_cbc(cipher_text, key, iv)
 
             result = plaintext.decode("utf-8")[:-4]
 
@@ -96,74 +95,78 @@ class CryptoChallenge(unittest.TestCase):
 
         self.assertTrue(block_size == 16 and is_ecb and res == unknown_string)
 
-
-    def test_Set02_Challenge13(self):
+    def test_Set2_Challenge13(self):
         """
         ECB cut-and-paste
         """
         cookie = 'foo=bar&baz=qux&zap=zazzle'
         json = util.decode_cookie(cookie)
-        result = {
+        expeced_cookie = {
             'foo': 'bar',
             'baz': 'qux',
             'zap': 'zazzle'
         }
-        # result = [
-        #     ('foo', 'bar'),
-        #     ('baz', 'qux'),
-        #     ('zap', 'zazzle')
-        # ]
-
-        self.assertEqual(json, result)
+        self.assertEqual(json, expeced_cookie)
 
         profile = util.profile_for('foo@bar.com')
-        # print(plaintext)
-        cookie_result = 'email=foo@bar.com&uid=10&role=user'
-        self.assertEqual(profile, cookie_result)
+        expeced_profile = 'email=foo@bar.com&uid=10&role=user'
+        self.assertEqual(profile, expeced_profile)
+
+        key = AESEncryption().random_key(16)
+        ciphertext = AESEncryption(key, 'ECB').encrypt(bytes(profile, encoding='utf-8'))
+        # print(ciphertext)
+        # decrypted = AESEncryption(key, 'ECB').decrypt(ciphertext)
+        # print(decrypted)
+
+
+        profile = util.profile_for('four@four.com')
+        cipher_text= AESEncryption(key, 'ECB').encrypt(bytes(profile, encoding='utf-8'))
+        admin_email = ('\x00' * 30) + 'admin'# + ('\x0b' * 29)
+        admin_profile = util.profile_for(admin_email)
+        admin_cipher_text = AESEncryption(key, 'ECB').encrypt(bytes(admin_profile, encoding='utf-8'))
+
+        res = cipher_text[0:32] + admin_cipher_text[32:64]
+
+        result = AESEncryption(key, 'ECB').decrypt(res)
+        # print('result', result)
+        self.assertTrue('admin' in result.decode('utf-8'))
+
+    def test_Set2_Challenge14(self):
+        """Byte-at-a-time ECB decryption (Harder)"""
+
+        random_bytes = os.urandom(random.randint(0, 10))
+
+        unknown_string = binascii.a2b_base64(
+            b'''Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg
+                aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq
+                dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg
+                YnkK'''
+        )
+
+        target_bytes = b'my plain text'
+        _input = random_bytes + unknown_string + target_bytes
 
         key = util.random_key(16)
-        # ciphertext = util.aes_128_ecb(bytes(profile, encoding='utf-8'), key)
 
-        # attacker = AES.new(key, AES.MODE_ECB)
-        # plaintext = attacker.decrypt(ciphertext)
+        aes_128_ecb = lambda s: util.aes_128_ecb(s, key)
 
-        #  # 10x A to fill the first block, then admin padding for the next block
-        # plaintext = util.profile_for('A' * 10 + 'admin' + '\x0b' * 0xb)
-        # cipher = AES.new(key, AES.MODE_ECB)
-        # ciphertext = cipher.encrypt(util.pkcs7pad(bytes(plaintext)))
-        # adminBlock = ciphertext[16:32]  # this is the block that contains admin
+        block_size = util.detect_block_size(aes_128_ecb)
 
-        # # now request a regular account and make it an admin account
-        # # the mail address correctly aligns the blocks
-        # plaintext = profile_for('admin1@me.com')
-        # print( 'pre-encrypted data: ', util.decode_cookie(plaintext))
-        # ciphertext = cipher.encrypt(util.pkcs7pad(bytes(plaintext)), key)
+        result = util.find_every_byte(aes_128_ecb, block_size, _input)
 
-        # # replace the last block user+padding with admin+padding
-        # ciphertext = ciphertext[:-16] + adminBlock
-        # plaintext = cipher.decryot(ciphertext)
-
-        # # the object should now contain role: admin
-        # print ('manipulated data: ', decode_cookie(str(plaintext)))
+        self.assertTrue(target_bytes in result)
 
 
+    def test_Set2_Challange15(self):
+        """PKCS#7 padding validation"""
 
+        self.assertTrue(converter.is_valid_pkcs7_padding("ICE ICE BABY\x04\x04\x04\x04"))
 
-    # def test_Set2_Challenge13(self):
-    #     """
-    #     ECB cut-and-paste
-    #     """
-    #     cookie = 'foo=bar&baz=qux&zap=zazzle'
-    #     json = util.decode_cookie(cookie)
-    #     result = {
-    #         'foo': 'bar',
-    #         'baz': 'qux',
-    #         'zap': 'zazzle'
-    #     }
-    #     self.assertEqual(json, result)
-    #     # self.assertEqual(util.profile_for(json), cookie)
+        with self.assertRaises(converter.InvalidPkcs7PaddingException):
+            converter.is_valid_pkcs7_padding("ICE ICE BABY\x05\x05\x05\x05")
 
-
+        with self.assertRaises(converter.InvalidPkcs7PaddingException):
+            converter.is_valid_pkcs7_padding("ICE ICE BABY\x01\x02\x03\x04")
 
 if __name__ == '__main__':
     unittest.main()

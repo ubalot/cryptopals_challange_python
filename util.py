@@ -312,39 +312,23 @@ def find_every_byte(encryption, block_size, unknown_string):
 
 
 def decode_cookie(string):
+
+    def clean(s):
+        return s if s != '=' and s != '&' else ''
+
     json = {}
     couples = string.split('&')
     for couple in couples:
         key, value = couple.split('=')
-        clean = lambda s: s if s != '=' and s != '&' else ''
         json[key] = clean(value)
     return json
 
-# def profile_for(json):
-#     couples = ''.join( (str(k), str(v)) for k, v in json )
-#     return '&'.join( '='.join( couples ) )
 
-# def decode_cookie(cookie):
-#     escape = lambda x: str(x).replace('&', '\&').replace('=', '\=')
-#     # return {k: escape(v) for k, v in (rule.split('=') for rule in cookie.split('&'))}
-#     return [(k, escape(v)) for k, v in (rule.split('=') for rule in cookie.split('&'))]
-
-
-def encode_cookie(json):
-    escape = lambda x: str(x).replace('&', '').replace('=', '')
+def encode_as_cookie(json):
     chunks = []
     for k, v in json.items():
-        print(k, v)
         chunks.append(k + '=' + str(v).replace('&', '').replace('=', ''))
-    print('&'.join(chunks))
     return '&'.join(chunks)
-    # return '&'.join('='.join([k, escape(v)]) for k, v in json.items())
-    # return '&'.join('='.join({k, escape(v)} for k, v in json))
-    # # couples = ''.join( (str(k), str(v)) for k, v in json )
-    # # return '&'.join( '='.join( couples ) )
-
-
-
 
 
 def profile_for(usermail):
@@ -353,10 +337,4 @@ def profile_for(usermail):
         'uid': 10,
         'role': 'user'
     }
-    # profile = [
-    #     ('email', usermail),
-    #     ('uid', 10),
-    #     ('role', 'user')
-    # ]
-    print(profile)
-    return encode_cookie(profile)
+    return encode_as_cookie(profile)
