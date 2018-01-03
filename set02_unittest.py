@@ -168,5 +168,51 @@ class CryptoChallenge(unittest.TestCase):
         with self.assertRaises(converter.InvalidPkcs7PaddingException):
             converter.is_valid_pkcs7_padding("ICE ICE BABY\x01\x02\x03\x04")
 
+    def test_Set2_Challange16(self):
+        """CBC bitflipping attacks"""
+
+        key = AESEncryption().random_key(16)
+        iv = AESEncryption().random_key(16)
+
+        def first_function(string):
+            prepend = b"comment1=cooking%20MCs;userdata="
+            append = b";comment2=%20like%20a%20pound%20of%20bacon"
+            res = prepend + string + append
+            result = res.replace(b';', b'%3B').replace(b'=', b'%3D')
+            cipher_text = AESEncryption(key, 'CBC', iv).encrypt(result)
+            return cipher_text
+
+        def second_function(cipher_text):
+            plain_text = AESEncryption(key, 'CBC', iv).decrypt(cipher_text, key)
+            print(plain_text)
+            # return b';admin=true;' in plain_text
+            return b'%3Badmin%3Dtrue%3B' in plain_text
+
+        plain_text = b'XXXXXXXXXXXXXXXX;admin=true;XXXX'
+        cipher_text = first_function(plain_text)
+        self.assertFalse(second_function(cipher_text))
+        # print(AESEncryption(key, 'CBC', iv).decrypt(cipher_text))
+
+        ### WTF should i do???
+        # def attack(ciphertext):
+        #     ciphertext_list = list(ciphertext)
+        #     byte_x = ciphertext_list[37]
+        #     ciphertext_list[37] = byte_x ^ 1
+        #     byte_y = ciphertext_list[43]
+        #     ciphertext_list[43] = byte_y ^ 64
+        #     # result = numberlist_to_bytes(ciphertext_list)
+        #     # return result
+        #     result = b''
+        #     for char in ciphertext_list:
+        #         result += bytes([char])
+        #     return result
+        #
+        # # self.assertTrue(second_function(attack(cipher_text)))
+        # x = list(cipher_text)
+        # x[32] ^= 1
+        # x[38] ^= 1
+        # x[43] ^= 64
+        # self.assertTrue(second_function(bytes(x)))
+
 if __name__ == '__main__':
     unittest.main()

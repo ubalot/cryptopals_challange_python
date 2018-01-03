@@ -10,7 +10,7 @@ from utils.binary_data_operators import fixed_xor
 
 
 class AESEncryption(object):
-    def __init__(self, key=None, encryption_mode='ECB'):
+    def __init__(self, key=None, encryption_mode='ECB', iv=None):
 
         self.__key = key if key else self.random_key(16)
 
@@ -19,7 +19,10 @@ class AESEncryption(object):
         elif encryption_mode == 'CBC':
             self.__encryption_mode = AES.MODE_CBC
 
-        self.cipher = AES.new(self.__key, self.__encryption_mode)
+        if not self.__encryption_mode == AES.MODE_CBC:
+            self.cipher = AES.new(self.__key, self.__encryption_mode)
+        else:
+            self.cipher = AES.new(self.__key, self.__encryption_mode, iv)
 
     @classmethod
     def new(cls, key, encryption_mode='ECB'):
